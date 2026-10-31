@@ -17,24 +17,26 @@ class TripPDF(FPDF):
 
     def header(self):
         if self.page_no() > 1:
+            self.set_y(8)
             self.set_font(self.custom_font, "I", 8)
-            self.set_text_color(140, 150, 165)
-            self.cell(0, 6, "Report di Viaggio: Tolmezzo (UD) -> Montreuil (Francia)", border=0, align="L")
-            self.cell(0, 6, "Trip Cost Calculator", border=0, align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            self.set_draw_color(226, 232, 240)
+            self.set_text_color(130, 145, 165)
+            self.set_x(15)
+            self.cell(105, 5, "Report di Viaggio: Tolmezzo (UD) -> Montreuil (Francia)", border=0, align="L")
+            self.set_x(120)
+            self.cell(75, 5, "Trip Cost Calculator", border=0, align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            self.set_draw_color(210, 222, 238)
             self.set_line_width(0.3)
-            self.line(15, 17, 195, 17)
-            self.ln(5)
+            self.line(15, 14.5, 195, 14.5)
+            self.set_y(19)
 
     def footer(self):
-        self.set_y(-13)
-        self.set_draw_color(226, 232, 240)
+        self.set_y(-12)
+        self.set_draw_color(220, 230, 242)
         self.set_line_width(0.3)
-        self.line(15, self.get_y(), 195, self.get_y())
-        self.ln(2)
+        self.line(15, self.get_y() - 1.5, 195, self.get_y() - 1.5)
         self.set_font(self.custom_font, "", 8)
         self.set_text_color(140, 150, 165)
-        self.cell(0, 7, f"Documento di Viaggio e Pianificazione Costi  |  Pagina {self.page_no()}/{{nb}}", border=0, align="C")
+        self.cell(0, 6, f"Documento di Viaggio e Pianificazione Costi  |  Pagina {self.page_no()}/{{nb}}", border=0, align="C")
 
 def clean_inline(text: str) -> str:
     """Rimuove markdown e caratteri non supportati, gestisce frecce ed entità"""
@@ -77,32 +79,40 @@ def setup_fonts(pdf: FPDF) -> str:
 def determine_col_widths(rows: list) -> tuple:
     num_cols = max(len(r) for r in rows)
     first_row_text = " ".join(rows[0]).lower() if rows else ""
+    
     if num_cols == 2:
         return (65.0, 115.0)
     elif num_cols == 3:
-        # Tabella consumi carburante (Consumo, Sola Andata, A/R)
+        if "voce" in first_row_text or "spesa" in first_row_text or "andata" in first_row_text or "sintesi" in first_row_text:
+            # Tabella Sintesi Costi (Voce di Spesa, Sola Andata, Andata e Ritorno)
+            return (88.0, 44.0, 48.0)
         return (50.0, 65.0, 65.0)
     elif num_cols == 4:
-        # Tabella parcheggi (Soluzione, Tipologia, Costo, Vantaggi e Svantaggi)
-        return (44.0, 36.0, 28.0, 72.0)
+        if "paese" in first_row_text or "attraversato" in first_row_text:
+            # Tabella Prezzi Carburante per Paese:
+            # Paese (28mm) | Prezzo Autostrada (46mm) | Prezzo Minimo / Smart (66mm) | Risparmio al Litro (40mm)
+            return (28.0, 46.0, 66.0, 40.0)
+        elif "scenario" in first_row_text or "rifornimento" in first_row_text:
+            # Tabella Confronto Scenari:
+            # Scenario (68mm) | Prezzo Medio (34mm) | Sola Andata (38mm) | Andata e Ritorno (40mm)
+            return (68.0, 34.0, 38.0, 40.0)
+        elif "parcheggio" in first_row_text or "soluzione" in first_row_text or "vantaggi" in first_row_text:
+            # Tabella Parcheggi Montreuil:
+            # Soluzione (38mm) | Tipologia (32mm) | Costo Stimato (30mm) | Vantaggi e Svantaggi (80mm)
+            return (38.0, 32.0, 30.0, 80.0)
+        return (45.0, 45.0, 45.0, 45.0)
     elif num_cols == 5:
-        if "progressiv" in first_row_text or "svolta" in first_row_text or "tratta" in first_row_text and "direzione" in first_row_text:
-            # Tabella Punti di Svolta / Tappe (Tratta Da->A, Autostrada/Direzione, Km Tratta, Km Prog., Tempo)
+        if "progressiv" in first_row_text or "svolta" in first_row_text:
             return (52.0, 48.0, 26.0, 26.0, 28.0)
-        elif "hotel" in first_row_text or "struttura" in first_row_text or "camera" in first_row_text or "alberg" in first_row_text:
-            # Tabella Hotel per sosta intermedia (Hotel, Posizione/Uscita, Tipo Camera, Prezzo 3 Pax, Portali/Parcheggio)
+        elif "hotel" in first_row_text or "struttura" in first_row_text or "camera" in first_row_text:
             return (44.0, 36.0, 30.0, 26.0, 44.0)
         # Tabella pedaggi (Tratta, Tipologia, Costo Andata, Costo Ritorno, Totale A/R)
-        return (44.0, 42.0, 27.0, 27.0, 40.0)
+        return (46.0, 48.0, 28.0, 28.0, 30.0)
     elif num_cols == 6:
         if "discrepanz" in first_row_text or "verifica" in first_row_text or "delta" in first_row_text:
-            # Tabella Verifica Prezzi Hotel (Struttura, Listino Ufficiale, Booking.com, Delta/Diff, Stato Verifica, Canale Consigliato)
             return (35.0, 24.0, 24.0, 20.0, 35.0, 42.0)
-        elif "hotel" in first_row_text or "stelle" in first_row_text or "struttura" in first_row_text:
-            # Tabella Hotel a 6 colonne (Hotel, Categoria/Stelle, Prezzo Ufficiale, Prezzo Booking, Uscita/Posizione, Servizi Auto)
-            return (35.0, 23.0, 27.0, 27.0, 32.0, 36.0)
-        # Tabella Punti di Svolta a 6 colonne (Tratta Da->A, Autostrada/Dir., Km Tratta, Km Prog., Tempo Tratta, Tempo Prog.)
-        return (42.0, 38.0, 24.0, 24.0, 25.0, 27.0)
+        # Tabella Punti di Svolta / Tappe (Tratta Da->A, Autostrada/Dir., Distanza Tratta, Km Prog., Tempo Tratta, Tempo Prog.)
+        return (38.0, 42.0, 25.0, 25.0, 24.0, 26.0)
     else:
         w = 180.0 / num_cols
         return tuple(w for _ in range(num_cols))
@@ -111,19 +121,39 @@ def render_table_block(pdf: FPDF, rows: list, font_name: str):
     if not rows:
         return
 
-    # Garanzia che nessuna tabella venga spezzata tra due pagine:
-    # Se lo spazio residuo è inferiore a 55mm (altezza minima per una tabella integra), andiamo a pagina nuova
+    # Garanzia che nessuna tabella venga spezzata tra due pagine
     space_left = pdf.h - pdf.b_margin - pdf.get_y()
-    if space_left < 55:
+    if space_left < 50:
         pdf.add_page()
 
-    # Reset cruciale dello stato grafico del documento prima di iniziare la tabella
+    # Reset dello stato grafico
     pdf.set_fill_color(255, 255, 255)
     pdf.set_text_color(51, 65, 85)
     pdf.set_draw_color(210, 220, 235)
     pdf.set_line_width(0.2)
+    pdf.set_font(font_name, "", 8.0)
 
     col_widths = determine_col_widths(rows)
+    first_row_text = " ".join(rows[0]).lower() if rows else ""
+    
+    # Determina allineamento coerente per colonna
+    num_cols = len(col_widths)
+    col_alignments = ["L"] * num_cols
+    
+    if num_cols == 6:
+        col_alignments = ["L", "L", "C", "C", "C", "C"]
+    elif num_cols == 5:
+        col_alignments = ["L", "L", "C", "C", "C"]
+    elif num_cols == 4:
+        if "paese" in first_row_text:
+            col_alignments = ["L", "C", "L", "C"]
+        elif "scenario" in first_row_text:
+            col_alignments = ["L", "C", "C", "C"]
+        elif "parcheggio" in first_row_text or "soluzione" in first_row_text:
+            col_alignments = ["L", "L", "C", "L"]
+    elif num_cols == 3:
+        col_alignments = ["L", "C", "C"]
+
     headings_style = FontFace(
         family=font_name,
         emphasis="B",
@@ -132,6 +162,8 @@ def render_table_block(pdf: FPDF, rows: list, font_name: str):
         fill_color=(233, 242, 254)  # Azzurrino chiaro per l'intestazione
     )
 
+    bold_style = FontFace(emphasis="B")
+
     with pdf.table(
         col_widths=col_widths,
         first_row_as_headings=True,
@@ -139,26 +171,31 @@ def render_table_block(pdf: FPDF, rows: list, font_name: str):
         cell_fill_mode="ROWS",
         cell_fill_color=(247, 249, 253),  # Grigio-azzurro chiarissimo per le righe alternate
         padding=1.6,
-        line_height=4.1,
+        line_height=4.0,
         width=180
     ) as table:
         for r_idx, row in enumerate(rows):
             t_row = table.row()
+            row_raw_text = " ".join(row).lower()
+            is_summary_row = ("totale" in row_raw_text or "risparmio" in row_raw_text or "quota" in row_raw_text)
+            
             for c_idx, cell_value in enumerate(row):
                 m = re.search(r'\[([^\]]+)\]\(([^\)]+)\)', cell_value)
                 link_url = m.group(2) if m else None
                 val = clean_inline(cell_value)
+                align = col_alignments[c_idx] if c_idx < len(col_alignments) else "L"
+                
+                # Grassetto per righe di riepilogo o celle con enfasi **
+                cell_is_bold = ("**" in cell_value) or (is_summary_row and r_idx > 0)
+                style = bold_style if cell_is_bold else None
+                
                 if r_idx == 0:
-                    t_row.cell(val)
+                    t_row.cell(val, align=align)
                 else:
-                    # Allineamento a destra se è un importo/costo o percentuale
-                    is_numeric = any(k in val for k in ["€", "EUR", "%", "km", "min", "ore", "L"])
-                    is_text_start = any(val.startswith(w) for w in ["Italia", "Austria", "Germania", "Francia", "Spazi", "Silos", "Garage", "In Strada", "Parcheggio", "Sito", "Booking"])
-                    align = "R" if is_numeric and not is_text_start else "L"
                     if link_url:
-                        t_row.cell(val, align=align, link=link_url)
+                        t_row.cell(val, align=align, link=link_url, style=style)
                     else:
-                        t_row.cell(val, align=align)
+                        t_row.cell(val, align=align, style=style)
 
     # Ripristino post tabella
     pdf.set_fill_color(255, 255, 255)
@@ -213,9 +250,9 @@ def convert_md_to_pdf(md_path: str, pdf_path: str):
     pdf = TripPDF(font_family=font_name, orientation="P", unit="mm", format="A4")
     setup_fonts(pdf)
     pdf.alias_nb_pages()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_margins(15, 19, 15)
+    pdf.set_auto_page_break(auto=True, margin=18)
     pdf.add_page()
-    pdf.set_margins(15, 15, 15)
 
     # Inizializzazione stato grafico sicuro
     pdf.set_fill_color(255, 255, 255)
@@ -298,7 +335,7 @@ def convert_md_to_pdf(md_path: str, pdf_path: str):
         # 5. Titoli Sezione (## )
         if line.startswith("## "):
             # Sezioni importanti o con tabelle estese iniziano a pagina nuova per garantire perfetta leggibilità
-            is_new_page_section = any(line.startswith(prefix) for prefix in ["## 3.", "## 4.", "## 5.", "## 6.", "## 7."])
+            is_new_page_section = any(line.startswith(prefix) for prefix in ["## 3.", "## 4.", "## 5.", "## 6.", "## 7.", "## 8."])
             if is_new_page_section or (pdf.h - pdf.b_margin - pdf.get_y()) < 65:
                 pdf.add_page()
             else:
