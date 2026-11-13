@@ -1,6 +1,6 @@
 import time
 import requests
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 from agents.base_agent import BaseAgent
 from models.trip_models import RouteResult
 
@@ -12,14 +12,20 @@ class RouteAgent(BaseAgent):
         )
         self.google_api_key = google_maps_api_key
 
-    def calculate_route(self, origin: str, destination: str, avoid_tolls: bool = False) -> Tuple[RouteResult, Dict[str, Any]]:
+    def calculate_route(
+        self,
+        origin: str,
+        destination: str,
+        avoid_tolls: bool = False,
+        waypoints: Optional[List[str]] = None,
+    ) -> Tuple[RouteResult, Dict[str, Any]]:
         """
         Calcola l'itinerario.
         Restituisce un RouteResult e il payload grezzo per l'estrazione di informazioni specifiche sui pedaggi.
         """
         if self.google_api_key:
             try:
-                return self._compute_with_google(origin, destination, avoid_tolls)
+                return self._compute_with_google(origin, destination, avoid_tolls, waypoints=waypoints)
             except Exception as e:
                 # In caso di errore o problemi con la chiave API, fallback automatico a OSRM
                 print(f"[RouteAgent] Avviso: Google Routes API non disponibile ({e}). Passo al motore OpenStreetMap/OSRM...")
@@ -27,7 +33,13 @@ class RouteAgent(BaseAgent):
         else:
             return self._compute_with_osrm(origin, destination, avoid_tolls)
 
-    def _compute_with_google(self, origin: str, destination: str, avoid_tolls: bool) -> Tuple[RouteResult, Dict[str, Any]]:
+    def _compute_with_google(
+        self,
+        origin: str,
+        destination: str,
+        avoid_tolls: bool,
+        waypoints: Optional[List[str]] = None,
+    ) -> Tuple[RouteResult, Dict[str, Any]]:
         url = "https://routes.googleapis.com/directions/v2:computeRoutes"
         headers = {
             "Content-Type": "application/json",
@@ -35,12 +47,13 @@ class RouteAgent(BaseAgent):
             "X-Goog-FieldMask": (
                 "routes.duration,"
                 "routes.distanceMeters,"
+                "routes.polyline.encodedPolyline,"
                 "routes.travelAdvisory.tollInfo,"
                 "routes.legs.travelAdvisory.tollInfo,"
                 "routes.legs.steps"
             )
         }
-        payload = {
+        payload: Dict[str, Any] = {
             "origin": {"address": origin},
             "destination": {"address": destination},
             "travelMode": "DRIVE",
@@ -50,6 +63,8 @@ class RouteAgent(BaseAgent):
                 "avoidTolls": avoid_tolls
             }
         }
+        if waypoints:
+            payload["intermediates"] = [{"address": w} for w in waypoints]
         response = requests.post(url, json=payload, headers=headers, timeout=12)
         if response.status_code != 200:
             raise RuntimeError(f"Google API Error {response.status_code}: {response.text}")

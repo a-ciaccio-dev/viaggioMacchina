@@ -1,5 +1,6 @@
 from .base_agent import BaseAgent
 from .route_agent import RouteAgent
+from .places_agent import PlacesAgent
 from .toll_agent import TollAgent
 from .fuel_agent import FuelAgent
 from .fuel_strategy_agent import FuelStrategyAgent
@@ -11,6 +12,7 @@ from .coordinator_agent import CoordinatorAgent
 __all__ = [
     "BaseAgent",
     "RouteAgent",
+    "PlacesAgent",
     "TollAgent",
     "FuelAgent",
     "FuelStrategyAgent",

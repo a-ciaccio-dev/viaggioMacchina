@@ -11,9 +11,10 @@ from fpdf.enums import XPos, YPos
 from fpdf.fonts import FontFace
 
 class TripPDF(FPDF):
-    def __init__(self, font_family="helvetica", *args, **kwargs):
+    def __init__(self, font_family="helvetica", header_title="Report di Viaggio", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.custom_font = font_family
+        self.header_title = header_title
 
     def header(self):
         if self.page_no() > 1:
@@ -21,7 +22,7 @@ class TripPDF(FPDF):
             self.set_font(self.custom_font, "I", 8)
             self.set_text_color(130, 145, 165)
             self.set_x(15)
-            self.cell(105, 5, "Report di Viaggio: Tolmezzo (UD) -> Montreuil (Francia)", border=0, align="L")
+            self.cell(105, 5, self.header_title, border=0, align="L")
             self.set_x(120)
             self.cell(75, 5, "Trip Cost Calculator", border=0, align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             self.set_draw_color(210, 222, 238)
@@ -44,6 +45,7 @@ def clean_inline(text: str) -> str:
     text = re.sub(r'\*\*([^\*]+)\*\*', r'\1', text)
     text = re.sub(r'\*([^\*]+)\*', r'\1', text)
     text = text.replace(r'\rightarrow', '->').replace(r'\leftrightarrow', '<->').replace('$', '')
+    text = text.replace('—', '-').replace('–', '-')
     text = text.replace('★', ' Stelle ').replace('  Stelle', ' Stelle')
     emoji_pattern = re.compile(
         "["
@@ -109,7 +111,9 @@ def determine_col_widths(rows: list) -> tuple:
         # Tabella pedaggi (Tratta, Tipologia, Costo Andata, Costo Ritorno, Totale A/R)
         return (46.0, 48.0, 28.0, 28.0, 30.0)
     elif num_cols == 6:
-        if "discrepanz" in first_row_text or "verifica" in first_row_text or "delta" in first_row_text:
+        if "spunta" in first_row_text or "casella" in first_row_text or "check" in first_row_text:
+            return (14.0, 20.0, 20.0, 22.0, 22.0, 82.0)
+        if "discrepanz" in first_row_text or "verifica" in first_row_text:
             return (35.0, 24.0, 24.0, 20.0, 35.0, 42.0)
         # Tabella Punti di Svolta / Tappe (Tratta Da->A, Autostrada/Dir., Distanza Tratta, Km Prog., Tempo Tratta, Tempo Prog.)
         return (38.0, 42.0, 25.0, 25.0, 24.0, 26.0)
@@ -141,7 +145,10 @@ def render_table_block(pdf: FPDF, rows: list, font_name: str):
     col_alignments = ["L"] * num_cols
     
     if num_cols == 6:
-        col_alignments = ["L", "L", "C", "C", "C", "C"]
+        if "spunta" in first_row_text or "casella" in first_row_text or "check" in first_row_text:
+            col_alignments = ["C", "C", "C", "C", "C", "L"]
+        else:
+            col_alignments = ["L", "L", "C", "C", "C", "C"]
     elif num_cols == 5:
         col_alignments = ["L", "L", "C", "C", "C"]
     elif num_cols == 4:
@@ -237,17 +244,25 @@ def render_callout_block(pdf: FPDF, lines: list, font_name: str):
     pdf.set_text_color(51, 65, 85)
     pdf.set_y(start_y + box_height + 2.5)
 
-def convert_md_to_pdf(md_path: str, pdf_path: str):
+def convert_md_to_pdf(md_path: str, pdf_path: str, header_title: str = None):
     if not os.path.exists(md_path):
         raise FileNotFoundError(f"File non trovato: {md_path}")
 
     with open(md_path, "r", encoding="utf-8") as f:
         raw_lines = [line.rstrip("\r\n") for line in f.readlines()]
 
+    if not header_title:
+        for l in raw_lines:
+            if l.strip().startswith("# "):
+                header_title = clean_inline(l.strip()[2:])[:55]
+                break
+        if not header_title:
+            header_title = "Report di Viaggio"
+
     temp_pdf = FPDF()
     font_name = setup_fonts(temp_pdf)
 
-    pdf = TripPDF(font_family=font_name, orientation="P", unit="mm", format="A4")
+    pdf = TripPDF(font_family=font_name, header_title=header_title, orientation="P", unit="mm", format="A4")
     setup_fonts(pdf)
     pdf.alias_nb_pages()
     pdf.set_margins(15, 19, 15)
@@ -335,7 +350,7 @@ def convert_md_to_pdf(md_path: str, pdf_path: str):
         # 5. Titoli Sezione (## )
         if line.startswith("## "):
             # Sezioni importanti o con tabelle estese iniziano a pagina nuova per garantire perfetta leggibilità
-            is_new_page_section = any(line.startswith(prefix) for prefix in ["## 3.", "## 4.", "## 5.", "## 6.", "## 7.", "## 8."])
+            is_new_page_section = any(line.startswith(prefix) for prefix in ["## 3.", "## 4.", "## 5.", "## 6.", "## 7.", "## 8.", "## 9."])
             if is_new_page_section or (pdf.h - pdf.b_margin - pdf.get_y()) < 65:
                 pdf.add_page()
             else:
@@ -357,10 +372,26 @@ def convert_md_to_pdf(md_path: str, pdf_path: str):
             i += 1
             continue
 
+        # 0. Interruzione Pagina Esplicita
+        if line in ["<!-- pagebreak -->", "\\pagebreak", "[pagebreak]"]:
+            pdf.add_page()
+            i += 1
+            continue
+
         # 6. Sotto-titoli (### )
         if line.startswith("### "):
-            # Se è una sottosezione con tabella dedicata (es. Report Verifica Prezzi) o se resta pochissimo spazio per il titolo, va a pagina nuova
-            is_sub_new_page = "verifica" in line.lower() or (pdf.h - pdf.b_margin - pdf.get_y()) < 35
+            # Guarda avanti: se la sottosezione è seguita da una tabella, serve spazio sufficiente (almeno 65 mm)
+            next_is_table = False
+            for peek_j in range(i + 1, min(i + 5, len(raw_lines))):
+                peek_line = raw_lines[peek_j].strip()
+                if peek_line.startswith("|") and peek_line.endswith("|"):
+                    next_is_table = True
+                    break
+                elif peek_line:
+                    break
+
+            min_space_needed = 65 if next_is_table else 35
+            is_sub_new_page = "verifica" in line.lower() or (pdf.h - pdf.b_margin - pdf.get_y()) < min_space_needed
             if is_sub_new_page:
                 pdf.add_page()
             else:
