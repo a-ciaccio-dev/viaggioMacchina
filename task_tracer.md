@@ -8,16 +8,16 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 
 ## 📊 Riepilogo Avanzamento
 
-**Progresso Globale:** `4 / 6` step operativi completati (**67%**)
+**Progresso Globale:** `5 / 6` step operativi completati (**83%**)
 
 ```text
-[█████████████░░░░░░░] 67% (4/6 Task & Sotto-Task)
+[█████████████████░░░] 83% (5/6 Task & Sotto-Task)
 ```
 
 - **Branch attivo**: `feature/overpass-osm-fallback`
 - **Fasi totali**: `4`
-- **Step operativi totali**: `6` (`4` completati, `2` rimanenti)
-- **Stato attuale**: 🟡 In corso (Task 3)
+- **Step operativi totali**: `6` (`5` completati, `1` rimanenti)
+- **Stato attuale**: 🟡 In corso (Task 4)
 
 ---
 
@@ -36,7 +36,7 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 | **1. Fondamenta** | **Task 1** | `RouteAgent` OSRM: supporto `waypoints`, `overview=full&geometries=polyline` ed esposizione `polyline.encodedPolyline` | 🟡 Media | ✅ Completato | `11/11 passed` | `task-1` | 2026-11-13 11:59 |
 | **2. Sviluppo** | **Task 2.1** | `PlacesAgent`: decoder polyline5, campionamento punti Haversine e client Overpass API | 🟡 Media | ✅ Completato | `11/11 passed` | `task-2.1` | 2026-11-13 12:01 |
 | **2. Sviluppo** | **Task 2.2** | `PlacesAgent`: fallback automatico Overpass/Nominatim senza API key e normalizzazione output | 🟡 Media | ✅ Completato | `11/11 passed` | `task-2.2` | 2026-11-13 12:02 |
-| **3. Verifica** | **Task 3** | Test unitari con mock HTTP per OSRM polyline/waypoints e Overpass fallback (`test_places_agent.py`) | 🟡 Media | ⏳ Da fare | `—` | `—` | `—` |
+| **3. Verifica** | **Task 3** | Test unitari con mock HTTP per OSRM polyline/waypoints e Overpass fallback (`test_places_agent.py`) | 🟡 Media | ✅ Completato | `16/16 passed` | `task-3` | 2026-11-13 12:04 |
 | **4. E2E & Chiusura** | **Task 4** | Verifica reale su tratta Montreuil -> Metz (TotalEnergies su A4) e chiusura `task_tracer.md` | 🟢 Bassa | ⏳ Da fare | `—` | `—` | `—` |
 
 ---

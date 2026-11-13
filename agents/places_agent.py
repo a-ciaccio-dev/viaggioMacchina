@@ -165,13 +165,6 @@ class PlacesAgent(BaseAgent):
             Lista di dizionari rappresentanti i luoghi trovati.
         """
         if not self.google_api_key and self.use_overpass_fallback:
-            return self._search_along_route_overpass(
-                text_query=text_query,
-                encoded_polyline=encoded_polyline,
-                max_results=max_results,
-            )
-
-        if not self.google_api_key and self.use_overpass_fallback:
             return self._search_place_nominatim(
                 text_query=text_query,
                 max_results=max_results,

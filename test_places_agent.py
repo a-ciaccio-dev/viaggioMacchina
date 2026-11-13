@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from agents.places_agent import PlacesAgent
+from agents.places_agent import PlacesAgent, decode_polyline, sample_route_points
 from agents.route_agent import RouteAgent
 from models.trip_models import RouteResult
 
@@ -230,3 +230,157 @@ def test_route_agent_omits_intermediates_when_waypoints_none_or_empty(mock_post,
     payload = call_kwargs["json"]
     assert "intermediates" not in payload
     assert payload["routeModifiers"] == {"avoidTolls": True}
+
+
+# --- Test Overpass / OSRM Fallback ---
+
+
+def test_decode_polyline_and_sample_route_points():
+    """Verifica il decoder polyline5 standard e il campionamento punti lungo la rotta."""
+    pts = decode_polyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@")
+    assert len(pts) == 3
+    assert pts[0] == pytest.approx((38.5, -120.2), abs=1e-4)
+    assert pts[1] == pytest.approx((40.7, -120.95), abs=1e-4)
+    assert pts[2] == pytest.approx((43.252, -126.453), abs=1e-4)
+
+    sampled = sample_route_points(pts, step_km=500.0)
+    assert sampled[0] == pts[0]
+    assert sampled[-1] == pts[-1]
+
+
+@patch("agents.places_agent.requests.post")
+def test_places_agent_overpass_fallback_search_along_route(mock_post):
+    """Verifica che PlacesAgent senza API key interroghi Overpass API e normalizzi i risultati."""
+    mock_post.return_value = _make_mock_response(
+        status_code=200,
+        json_data={
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 101,
+                    "lat": 40.7,
+                    "lon": -120.95,
+                    "tags": {
+                        "amenity": "fuel",
+                        "brand": "TotalEnergies",
+                        "name": "Relais Autoroute",
+                        "ref": "A4",
+                    },
+                },
+                {
+                    "type": "way",
+                    "id": 202,
+                    "center": {"lat": 38.5, "lon": -120.2},
+                    "tags": {
+                        "amenity": "fuel",
+                        "name": "TotalEnergies Aire Nord",
+                        "addr:street": "Autoroute A4",
+                        "addr:city": "Reims",
+                    },
+                },
+            ]
+        },
+    )
+
+    agent = PlacesAgent(google_maps_api_key="")
+    results = agent.search_along_route(
+        text_query="TotalEnergies",
+        encoded_polyline="_p~iF~ps|U_ulLnnqC_mqNvxq`@",
+        max_results=5,
+    )
+
+    assert len(results) == 2
+    assert results[0]["source"] == "overpass"
+    assert results[0]["id"] == "osm:way/202"
+    assert results[0]["displayName"]["text"] == "TotalEnergies Aire Nord"
+    assert "Autoroute A4, Reims" in results[0]["formattedAddress"]
+    assert results[1]["id"] == "osm:node/101"
+    assert results[1]["displayName"]["text"] == "TotalEnergies - Relais Autoroute"
+
+    mock_post.assert_called_once()
+    call_args, call_kwargs = mock_post.call_args
+    assert call_args[0] == PlacesAgent.OVERPASS_URL
+    query_sent = call_kwargs["data"]["data"]
+    assert '["amenity"="fuel"]["brand"~"Total",i]' in query_sent
+
+
+@patch("agents.places_agent.requests.post")
+def test_places_agent_overpass_http_error_raises_runtime_error(mock_post):
+    """Verifica che errori HTTP di Overpass sollevino RuntimeError."""
+    mock_post.return_value = _make_mock_response(status_code=504, text="Gateway Timeout")
+    agent = PlacesAgent(google_maps_api_key="")
+    with pytest.raises(RuntimeError, match="Overpass API Error 504"):
+        agent.search_along_route("TotalEnergies", "_p~iF~ps|U_ulLnnqC")
+
+
+@patch("agents.places_agent.requests.get")
+def test_places_agent_nominatim_fallback_search_place(mock_get):
+    """Verifica che search_place senza API key usi Nominatim e normalizzi i risultati."""
+    mock_get.return_value = _make_mock_response(
+        status_code=200,
+        json_data=[
+            {
+                "osm_type": "node",
+                "osm_id": 999,
+                "lat": "48.86",
+                "lon": "2.44",
+                "display_name": "Montreuil, Seine-Saint-Denis, France",
+            }
+        ],
+    )
+
+    agent = PlacesAgent(google_maps_api_key="")
+    results = agent.search_place("Montreuil, France", max_results=3)
+
+    assert len(results) == 1
+    assert results[0]["source"] == "nominatim"
+    assert results[0]["displayName"]["text"] == "Montreuil"
+    assert results[0]["location"] == {"latitude": 48.86, "longitude": 2.44}
+
+
+@patch("agents.route_agent.time.sleep")
+@patch("agents.route_agent.requests.get")
+def test_route_agent_osrm_with_waypoints_and_polyline(mock_get, mock_sleep):
+    """Verifica che RouteAgent OSRM supporti waypoints ed esponga polyline.encodedPolyline."""
+    mock_get.side_effect = [
+        _make_mock_response(200, [{"lat": "48.86", "lon": "2.44", "display_name": "Montreuil"}]),
+        _make_mock_response(200, [{"lat": "49.25", "lon": "4.03", "display_name": "Reims"}]),
+        _make_mock_response(200, [{"lat": "49.12", "lon": "6.17", "display_name": "Metz"}]),
+        _make_mock_response(
+            200,
+            {
+                "code": "Ok",
+                "routes": [
+                    {
+                        "distance": 330000,
+                        "duration": 11400,
+                        "geometry": "osrmEncodedPolyline123",
+                        "legs": [
+                            {
+                                "steps": [
+                                    {"ref": "A4", "name": "Autoroute de l'Est", "distance": 280000}
+                                ]
+                            }
+                        ],
+                    }
+                ],
+            },
+        ),
+    ]
+
+    agent = RouteAgent(google_maps_api_key="")
+    route_result, raw_payload = agent.calculate_route(
+        origin="Montreuil",
+        destination="Metz",
+        waypoints=["Reims"],
+    )
+
+    assert route_result.is_google_api is False
+    assert route_result.distance_km == 330.0
+    assert raw_payload["source"] == "OSRM"
+    assert raw_payload["polyline"]["encodedPolyline"] == "osrmEncodedPolyline123"
+
+    osrm_call_url = mock_get.call_args_list[-1][0][0]
+    assert "2.44,48.86;4.03,49.25;6.17,49.12" in osrm_call_url
+    assert "overview=full" in osrm_call_url
+    assert "geometries=polyline" in osrm_call_url
