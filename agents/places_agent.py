@@ -236,13 +236,13 @@ class PlacesAgent(BaseAgent):
         if is_fuel and "total" in q_lower:
             return (
                 "[out:json][timeout:25];\n"
-                f'nwr["amenity"="fuel"]["brand"~"Total",i]({bbox});\n'
+                f'nw["amenity"="fuel"]["brand"~"Total",i]({bbox});\n'
                 "out center;"
             )
         if is_fuel:
             return (
                 "[out:json][timeout:25];\n"
-                f'nwr["amenity"="fuel"]({bbox});\n'
+                f'nw["amenity"="fuel"]({bbox});\n'
                 "out center;"
             )
 
@@ -250,7 +250,7 @@ class PlacesAgent(BaseAgent):
         name_filter = f'["name"~"{safe_token}",i]' if safe_token else ""
         return (
             "[out:json][timeout:25];\n"
-            f"nwr{name_filter}({bbox});\n"
+            f"nw{name_filter}({bbox});\n"
             "out center;"
         )
 
