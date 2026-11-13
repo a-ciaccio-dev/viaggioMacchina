@@ -8,16 +8,16 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 
 ## 📊 Riepilogo Avanzamento
 
-**Progresso Globale:** `2 / 6` step operativi completati (**33%**)
+**Progresso Globale:** `3 / 6` step operativi completati (**50%**)
 
 ```text
-[███████░░░░░░░░░░░░░] 33% (2/6 Task & Sotto-Task)
+[██████████░░░░░░░░░░] 50% (3/6 Task & Sotto-Task)
 ```
 
 - **Branch attivo**: `feature/overpass-osm-fallback`
 - **Fasi totali**: `4`
-- **Step operativi totali**: `6` (`2` completati, `4` rimanenti)
-- **Stato attuale**: 🟡 In corso (Task 2.1)
+- **Step operativi totali**: `6` (`3` completati, `3` rimanenti)
+- **Stato attuale**: 🟡 In corso (Task 2.2)
 
 ---
 
@@ -34,7 +34,7 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Init** | **Init** | Creazione e push branch `feature/overpass-osm-fallback` + `task_tracer.md` | 🟢 Bassa | ✅ Completato | `11/11 passed` | `init` | 2026-11-13 11:58 |
 | **1. Fondamenta** | **Task 1** | `RouteAgent` OSRM: supporto `waypoints`, `overview=full&geometries=polyline` ed esposizione `polyline.encodedPolyline` | 🟡 Media | ✅ Completato | `11/11 passed` | `task-1` | 2026-11-13 11:59 |
-| **2. Sviluppo** | **Task 2.1** | `PlacesAgent`: decoder polyline5, campionamento punti Haversine e client Overpass API | 🟡 Media | ⏳ Da fare | `—` | `—` | `—` |
+| **2. Sviluppo** | **Task 2.1** | `PlacesAgent`: decoder polyline5, campionamento punti Haversine e client Overpass API | 🟡 Media | ✅ Completato | `11/11 passed` | `task-2.1` | 2026-11-13 12:01 |
 | **2. Sviluppo** | **Task 2.2** | `PlacesAgent`: fallback automatico Overpass/Nominatim senza API key e normalizzazione output | 🟡 Media | ⏳ Da fare | `—` | `—` | `—` |
 | **3. Verifica** | **Task 3** | Test unitari con mock HTTP per OSRM polyline/waypoints e Overpass fallback (`test_places_agent.py`) | 🟡 Media | ⏳ Da fare | `—` | `—` | `—` |
 | **4. E2E & Chiusura** | **Task 4** | Verifica reale su tratta Montreuil -> Metz (TotalEnergies su A4) e chiusura `task_tracer.md` | 🟢 Bassa | ⏳ Da fare | `—` | `—` | `—` |
