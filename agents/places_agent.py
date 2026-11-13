@@ -101,13 +101,18 @@ class PlacesAgent(BaseAgent):
         "places.currentOpeningHours.openNow"
     )
 
-    def __init__(self, google_maps_api_key: Optional[str] = None):
+    def __init__(
+        self,
+        google_maps_api_key: Optional[str] = None,
+        use_overpass_fallback: bool = True,
+    ):
         super().__init__(
             name="PlacesAgent",
-            role="Cerca luoghi, indirizzi e punti di interesse lungo un itinerario tramite Google Places API (New)."
+            role="Cerca luoghi, indirizzi e punti di interesse lungo un itinerario tramite Google Places API (New) o fallback OpenStreetMap/Overpass."
         )
         raw_key = google_maps_api_key if google_maps_api_key is not None else GOOGLE_MAPS_API_KEY
         self.google_api_key: str = raw_key.strip() if raw_key else ""
+        self.use_overpass_fallback = use_overpass_fallback
 
     def search_along_route(
         self,
@@ -126,6 +131,13 @@ class PlacesAgent(BaseAgent):
         Returns:
             Lista di dizionari rappresentanti i luoghi trovati.
         """
+        if not self.google_api_key and self.use_overpass_fallback:
+            return self._search_along_route_overpass(
+                text_query=text_query,
+                encoded_polyline=encoded_polyline,
+                max_results=max_results,
+            )
+
         payload: Dict[str, Any] = {
             "textQuery": text_query,
             "maxResultCount": max_results,
@@ -152,6 +164,19 @@ class PlacesAgent(BaseAgent):
         Returns:
             Lista di dizionari rappresentanti i luoghi trovati.
         """
+        if not self.google_api_key and self.use_overpass_fallback:
+            return self._search_along_route_overpass(
+                text_query=text_query,
+                encoded_polyline=encoded_polyline,
+                max_results=max_results,
+            )
+
+        if not self.google_api_key and self.use_overpass_fallback:
+            return self._search_place_nominatim(
+                text_query=text_query,
+                max_results=max_results,
+            )
+
         payload: Dict[str, Any] = {
             "textQuery": text_query,
             "maxResultCount": max_results,
@@ -253,3 +278,128 @@ class PlacesAgent(BaseAgent):
             raise RuntimeError(f"Overpass API Error {response.status_code}: {response.text}")
 
         return response.json().get("elements", [])
+
+    def _normalize_overpass_element(self, element: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Normalizza un elemento Overpass nello stesso formato di Google Places API (New)."""
+        lat = element.get("lat")
+        lon = element.get("lon")
+        if lat is None or lon is None:
+            center = element.get("center") or {}
+            lat = center.get("lat")
+            lon = center.get("lon")
+        if lat is None or lon is None:
+            return None
+
+        tags = element.get("tags") or {}
+        name = tags.get("name") or tags.get("brand") or tags.get("operator") or "Senza nome"
+        brand = tags.get("brand")
+        if brand and brand.lower() not in name.lower():
+            display_name = f"{brand} - {name}"
+        else:
+            display_name = name
+
+        addr_parts = [
+            tags.get("addr:street"),
+            tags.get("addr:housenumber"),
+            tags.get("addr:postcode"),
+            tags.get("addr:city"),
+            tags.get("addr:country"),
+        ]
+        address = ", ".join(p for p in addr_parts if p)
+        if not address:
+            ref = tags.get("ref") or tags.get("highway")
+            address = f"Area lungo {ref}" if ref else f"{lat:.5f}, {lon:.5f}"
+
+        el_type = element.get("type", "node")
+        el_id = element.get("id", "")
+        return {
+            "id": f"osm:{el_type}/{el_id}",
+            "displayName": {"text": display_name},
+            "formattedAddress": address,
+            "location": {"latitude": float(lat), "longitude": float(lon)},
+            "googleMapsUri": f"https://www.google.com/maps/search/?api=1&query={lat},{lon}",
+            "source": "overpass",
+            "osmTags": tags,
+        }
+
+    def _search_along_route_overpass(
+        self,
+        text_query: str,
+        encoded_polyline: str,
+        max_results: int = 10,
+        radius_meters: int = 2500,
+    ) -> List[Dict[str, Any]]:
+        """Fallback Overpass API lungo la polilinea codificata della rotta."""
+        points = decode_polyline(encoded_polyline)
+        if not points:
+            return []
+
+        sampled = sample_route_points(points, step_km=25.0, max_points=40)
+        query = self._build_overpass_around_query(
+            points=sampled,
+            text_query=text_query,
+            radius_meters=radius_meters,
+        )
+        elements = self._query_overpass(query)
+
+        seen_ids = set()
+        normalized_with_order: List[Tuple[int, Dict[str, Any]]] = []
+        for el in elements:
+            item = self._normalize_overpass_element(el)
+            if not item or item["id"] in seen_ids:
+                continue
+            seen_ids.add(item["id"])
+            p_lat = item["location"]["latitude"]
+            p_lon = item["location"]["longitude"]
+            best_idx = min(
+                range(len(sampled)),
+                key=lambda i: haversine_km(p_lat, p_lon, sampled[i][0], sampled[i][1]),
+            )
+            normalized_with_order.append((best_idx, item))
+
+        normalized_with_order.sort(key=lambda pair: pair[0])
+        return [item for _, item in normalized_with_order[:max_results]]
+
+    def _search_place_nominatim(
+        self,
+        text_query: str,
+        max_results: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Fallback Nominatim per ricerca testuale senza Google Maps API Key."""
+        headers = {
+            "User-Agent": "TripCostCalculatorAgent/1.0 (OpenStreetMap Nominatim Fallback)"
+        }
+        params = {
+            "q": text_query,
+            "format": "json",
+            "limit": max_results,
+        }
+        try:
+            response = requests.get(
+                self.NOMINATIM_URL,
+                params=params,
+                headers=headers,
+                timeout=12,
+            )
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Errore di rete durante la chiamata a Nominatim: {exc}") from exc
+
+        if response.status_code != 200:
+            raise RuntimeError(f"Nominatim Error {response.status_code}: {response.text}")
+
+        results: List[Dict[str, Any]] = []
+        for item in response.json():
+            lat = float(item["lat"])
+            lon = float(item["lon"])
+            display_name = item.get("display_name", text_query)
+            results.append(
+                {
+                    "id": f"osm:{item.get('osm_type', 'node')}/{item.get('osm_id', '')}",
+                    "displayName": {"text": display_name.split(",")[0].strip()},
+                    "formattedAddress": display_name,
+                    "location": {"latitude": lat, "longitude": lon},
+                    "googleMapsUri": f"https://www.google.com/maps/search/?api=1&query={lat},{lon}",
+                    "source": "nominatim",
+                }
+            )
+        return results[:max_results]

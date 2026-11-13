@@ -24,20 +24,20 @@ def _make_mock_response(status_code: int = 200, json_data=None, text: str = "") 
 
 
 def test_places_agent_missing_api_key_raises_value_error():
-    """Verifica che PlacesAgent sollevi ValueError se la chiave API manca o e' vuota."""
-    agent = PlacesAgent(google_maps_api_key="")
+    """Verifica che PlacesAgent sollevi ValueError se la chiave API manca e il fallback e' disattivato."""
+    agent = PlacesAgent(google_maps_api_key="", use_overpass_fallback=False)
     with pytest.raises(ValueError, match="Chiave API Google Maps mancante"):
         agent.search_place("Ristorante Milano")
 
-    agent_spaces = PlacesAgent(google_maps_api_key="   ")
+    agent_spaces = PlacesAgent(google_maps_api_key="   ", use_overpass_fallback=False)
     with pytest.raises(ValueError, match="Chiave API Google Maps mancante"):
         agent_spaces.search_along_route("benzinaio", "abcPolyline123")
 
 
 def test_places_agent_missing_config_api_key_raises_value_error():
-    """Verifica ValueError anche quando google_maps_api_key e' None e config e' vuoto."""
+    """Verifica ValueError anche quando google_maps_api_key e' None, config e' vuoto e fallback disattivato."""
     with patch("agents.places_agent.GOOGLE_MAPS_API_KEY", ""):
-        agent = PlacesAgent(google_maps_api_key=None)
+        agent = PlacesAgent(google_maps_api_key=None, use_overpass_fallback=False)
         with pytest.raises(ValueError, match="Chiave API Google Maps mancante"):
             agent.search_place("Via Roma 10, Torino")
 
