@@ -29,9 +29,9 @@ class RouteAgent(BaseAgent):
             except Exception as e:
                 # In caso di errore o problemi con la chiave API, fallback automatico a OSRM
                 print(f"[RouteAgent] Avviso: Google Routes API non disponibile ({e}). Passo al motore OpenStreetMap/OSRM...")
-                return self._compute_with_osrm(origin, destination, avoid_tolls)
+                return self._compute_with_osrm(origin, destination, avoid_tolls, waypoints=waypoints)
         else:
-            return self._compute_with_osrm(origin, destination, avoid_tolls)
+            return self._compute_with_osrm(origin, destination, avoid_tolls, waypoints=waypoints)
 
     def _compute_with_google(
         self,
@@ -120,15 +120,34 @@ class RouteAgent(BaseAgent):
         display_name = item.get("display_name", query)
         return lat, lon, display_name
 
-    def _compute_with_osrm(self, origin: str, destination: str, avoid_tolls: bool) -> Tuple[RouteResult, Dict[str, Any]]:
-        # 1. Geocoding
+    def _compute_with_osrm(
+        self,
+        origin: str,
+        destination: str,
+        avoid_tolls: bool,
+        waypoints: Optional[List[str]] = None,
+    ) -> Tuple[RouteResult, Dict[str, Any]]:
+        # 1. Geocoding (origine, eventuali waypoint, destinazione)
         lat1, lon1, name1 = self._geocode_nominatim(origin)
+        coords: List[Tuple[float, float]] = [(lat1, lon1)]
+
+        if waypoints:
+            for wp in waypoints:
+                if wp and wp.strip():
+                    time.sleep(1)  # Rispetto delle policy di rate limit di Nominatim
+                    w_lat, w_lon, _ = self._geocode_nominatim(wp.strip())
+                    coords.append((w_lat, w_lon))
+
         time.sleep(1)  # Rispetto delle policy di rate limit di Nominatim
         lat2, lon2, name2 = self._geocode_nominatim(destination)
+        coords.append((lat2, lon2))
 
-        # 2. OSRM routing
-        # router.project-osrm.org supporta steps=true
-        osrm_url = f"https://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false&steps=true"
+        # 2. OSRM routing con geometria polyline completa per ricerche POI lungo il percorso
+        coords_str = ";".join(f"{lon},{lat}" for lat, lon in coords)
+        osrm_url = (
+            f"https://router.project-osrm.org/route/v1/driving/{coords_str}"
+            "?overview=full&geometries=polyline&steps=true"
+        )
         resp = requests.get(osrm_url, timeout=15)
         if resp.status_code != 200:
             raise RuntimeError(f"Errore OSRM routing: {resp.status_code}")
@@ -172,9 +191,13 @@ class RouteAgent(BaseAgent):
             steps_summary=[]
         )
 
+        encoded_polyline = route.get("geometry", "")
         raw_payload = {
             "source": "OSRM",
             "motorway_km": motorway_km,
-            "distance_km": distance_km
+            "distance_km": distance_km,
+            "polyline": {
+                "encodedPolyline": encoded_polyline
+            },
         }
         return route_result, raw_payload

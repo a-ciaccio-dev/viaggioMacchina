@@ -8,16 +8,16 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 
 ## 📊 Riepilogo Avanzamento
 
-**Progresso Globale:** `1 / 6` step operativi completati (**17%**)
+**Progresso Globale:** `2 / 6` step operativi completati (**33%**)
 
 ```text
-[███░░░░░░░░░░░░░░░░░] 17% (1/6 Task & Sotto-Task)
+[███████░░░░░░░░░░░░░] 33% (2/6 Task & Sotto-Task)
 ```
 
 - **Branch attivo**: `feature/overpass-osm-fallback`
 - **Fasi totali**: `4`
-- **Step operativi totali**: `6` (`1` completati, `5` rimanenti)
-- **Stato attuale**: 🟡 In corso (Task 1)
+- **Step operativi totali**: `6` (`2` completati, `4` rimanenti)
+- **Stato attuale**: 🟡 In corso (Task 2.1)
 
 ---
 
@@ -33,7 +33,7 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 | Fase | ID | Task / Sotto-Task | Difficoltà | Stato | Test Verificati | Commit Hash | Data/Ora Completamento |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Init** | **Init** | Creazione e push branch `feature/overpass-osm-fallback` + `task_tracer.md` | 🟢 Bassa | ✅ Completato | `11/11 passed` | `init` | 2026-11-13 11:58 |
-| **1. Fondamenta** | **Task 1** | `RouteAgent` OSRM: supporto `waypoints`, `overview=full&geometries=polyline` ed esposizione `polyline.encodedPolyline` | 🟡 Media | ⏳ Da fare | `—` | `—` | `—` |
+| **1. Fondamenta** | **Task 1** | `RouteAgent` OSRM: supporto `waypoints`, `overview=full&geometries=polyline` ed esposizione `polyline.encodedPolyline` | 🟡 Media | ✅ Completato | `11/11 passed` | `task-1` | 2026-11-13 11:59 |
 | **2. Sviluppo** | **Task 2.1** | `PlacesAgent`: decoder polyline5, campionamento punti Haversine e client Overpass API | 🟡 Media | ⏳ Da fare | `—` | `—` | `—` |
 | **2. Sviluppo** | **Task 2.2** | `PlacesAgent`: fallback automatico Overpass/Nominatim senza API key e normalizzazione output | 🟡 Media | ⏳ Da fare | `—` | `—` | `—` |
 | **3. Verifica** | **Task 3** | Test unitari con mock HTTP per OSRM polyline/waypoints e Overpass fallback (`test_places_agent.py`) | 🟡 Media | ⏳ Da fare | `—` | `—` | `—` |
