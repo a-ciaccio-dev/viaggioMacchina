@@ -8,16 +8,16 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 
 ## 📊 Riepilogo Avanzamento
 
-**Progresso Globale:** `5 / 6` step operativi completati (**83%**)
+**Progresso Globale:** `6 / 6` step operativi completati (**100%**)
 
 ```text
-[█████████████████░░░] 83% (5/6 Task & Sotto-Task)
+[████████████████████] 100% (6/6 Task & Sotto-Task)
 ```
 
 - **Branch attivo**: `feature/overpass-osm-fallback`
 - **Fasi totali**: `4`
-- **Step operativi totali**: `6` (`5` completati, `1` rimanenti)
-- **Stato attuale**: 🟡 In corso (Task 4)
+- **Step operativi totali**: `6` (`6` completati, `0` rimanenti)
+- **Stato attuale**: ✅ Completato
 
 ---
 
@@ -37,7 +37,7 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 | **2. Sviluppo** | **Task 2.1** | `PlacesAgent`: decoder polyline5, campionamento punti Haversine e client Overpass API | 🟡 Media | ✅ Completato | `11/11 passed` | `task-2.1` | 2026-11-13 12:01 |
 | **2. Sviluppo** | **Task 2.2** | `PlacesAgent`: fallback automatico Overpass/Nominatim senza API key e normalizzazione output | 🟡 Media | ✅ Completato | `11/11 passed` | `task-2.2` | 2026-11-13 12:02 |
 | **3. Verifica** | **Task 3** | Test unitari con mock HTTP per OSRM polyline/waypoints e Overpass fallback (`test_places_agent.py`) | 🟡 Media | ✅ Completato | `16/16 passed` | `task-3` | 2026-11-13 12:04 |
-| **4. E2E & Chiusura** | **Task 4** | Verifica reale su tratta Montreuil -> Metz (TotalEnergies su A4) e chiusura `task_tracer.md` | 🟢 Bassa | ⏳ Da fare | `—` | `—` | `—` |
+| **4. E2E & Chiusura** | **Task 4** | Verifica reale su tratta Montreuil -> Metz (TotalEnergies su A4) e chiusura `task_tracer.md` | 🟢 Bassa | ✅ Completato | `16/16 + E2E OK` | `task-4` | 2026-11-13 12:09 |
 
 ---
 
@@ -46,3 +46,4 @@ Al termine di ogni singolo task/sottotask: **Test -> Aggiornamento Task Tracer -
 > Annotare qui eventuali errori bloccanti incontrati durante l'esecuzione, decisioni architetturali prese in corso d'opera o modifiche all'ordine dei task.
 
 - *Inizializzazione branch dedicato `feature/overpass-osm-fallback` con baseline Google Places/Routes già presente.*
+- *Task 4: aggiunto fallback multi-mirror Overpass (`overpass-api.de`, `overpass.kumi.systems`, `maps.mail.ru`) e query bounding-box + filtro geodetico Haversine in Python per evitare timeout su tratte lunghe. E2E reale superato con 10 stazioni Total/TotalEnergies trovate.*

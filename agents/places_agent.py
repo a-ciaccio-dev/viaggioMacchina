@@ -90,6 +90,11 @@ class PlacesAgent(BaseAgent):
 
     SEARCH_TEXT_URL = "https://places.googleapis.com/v1/places:searchText"
     OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+    OVERPASS_MIRRORS = (
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    )
     NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
     DEFAULT_FIELD_MASK = (
         "places.id,"
@@ -214,63 +219,67 @@ class PlacesAgent(BaseAgent):
         text_query: str,
         radius_meters: int = 2500,
     ) -> str:
-        """Costruisce una query Overpass QL `around` lungo i punti campionati della rotta."""
-        coords_csv = ",".join(f"{lat:.5f},{lon:.5f}" for lat, lon in points)
-        q_lower = text_query.lower()
+        """Costruisce una query Overpass QL su bounding-box del corridoio per risposte rapide."""
+        lats = [p[0] for p in points]
+        lons = [p[1] for p in points]
+        pad_deg = max(0.03, radius_meters / 111000.0)
+        south = min(lats) - pad_deg
+        north = max(lats) + pad_deg
+        west = min(lons) - pad_deg
+        east = max(lons) + pad_deg
+        bbox = f"{south:.4f},{west:.4f},{north:.4f},{east:.4f}"
 
+        q_lower = text_query.lower()
         fuel_keywords = ("fuel", "benzina", "diesel", "carburante", "stazione", "distributore", "total")
         is_fuel = any(k in q_lower for k in fuel_keywords)
-
-        brand_filter = ""
-        if "total" in q_lower:
-            brand_filter = '["brand"~"Total",i]'
-        elif not is_fuel:
-            safe_token = re.sub(r'["\\]', "", text_query.strip())
-            if safe_token:
-                brand_filter = f'["name"~"{safe_token}",i]'
 
         if is_fuel and "total" in q_lower:
             return (
                 "[out:json][timeout:25];\n"
-                "(\n"
-                f'  nwr(around:{radius_meters},{coords_csv})["amenity"="fuel"]["brand"~"Total",i];\n'
-                f'  nwr(around:{radius_meters},{coords_csv})["amenity"="fuel"]["name"~"Total",i];\n'
-                f'  nwr(around:{radius_meters},{coords_csv})["amenity"="fuel"]["operator"~"Total",i];\n'
-                ");\n"
+                f'nwr["amenity"="fuel"]["brand"~"Total",i]({bbox});\n'
                 "out center;"
             )
         if is_fuel:
             return (
                 "[out:json][timeout:25];\n"
-                f'nwr(around:{radius_meters},{coords_csv})["amenity"="fuel"];\n'
+                f'nwr["amenity"="fuel"]({bbox});\n'
                 "out center;"
             )
 
+        safe_token = re.sub(r'["\\]', "", text_query.strip())
+        name_filter = f'["name"~"{safe_token}",i]' if safe_token else ""
         return (
             "[out:json][timeout:25];\n"
-            f'nwr(around:{radius_meters},{coords_csv}){brand_filter};\n'
+            f"nwr{name_filter}({bbox});\n"
             "out center;"
         )
 
     def _query_overpass(self, query: str) -> List[Dict[str, Any]]:
-        """Esegue una query POST verso Overpass API e restituisce gli elementi grezzi."""
+        """Esegue una query POST verso Overpass API (con fallback su mirror pubblici) e restituisce gli elementi grezzi."""
         headers = {
             "User-Agent": "TripCostCalculatorAgent/1.0 (OpenStreetMap Overpass Fallback)"
         }
-        try:
-            response = requests.post(
-                self.OVERPASS_URL,
-                data={"data": query},
-                headers=headers,
-                timeout=30,
-            )
-        except requests.RequestException as exc:
-            raise RuntimeError(f"Errore di rete durante la chiamata a Overpass API: {exc}") from exc
+        last_error: Optional[str] = None
+        for idx, url in enumerate(self.OVERPASS_MIRRORS):
+            try:
+                response = requests.post(
+                    url,
+                    data={"data": query},
+                    headers=headers,
+                    timeout=30,
+                )
+            except requests.RequestException as exc:
+                last_error = f"Errore di rete durante la chiamata a Overpass API ({url}): {exc}"
+                continue
 
-        if response.status_code != 200:
-            raise RuntimeError(f"Overpass API Error {response.status_code}: {response.text}")
+            if response.status_code == 200:
+                return response.json().get("elements", [])
 
-        return response.json().get("elements", [])
+            last_error = f"Overpass API Error {response.status_code}: {response.text}"
+            if response.status_code not in (429, 502, 503, 504) or idx == len(self.OVERPASS_MIRRORS) - 1:
+                raise RuntimeError(last_error)
+
+        raise RuntimeError(last_error or "Overpass API non disponibile")
 
     def _normalize_overpass_element(self, element: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Normalizza un elemento Overpass nello stesso formato di Google Places API (New)."""
@@ -337,17 +346,24 @@ class PlacesAgent(BaseAgent):
 
         seen_ids = set()
         normalized_with_order: List[Tuple[int, Dict[str, Any]]] = []
+        dense_points = sample_route_points(points, step_km=5.0, max_points=250)
+        max_dist_km = max(3.0, radius_meters / 1000.0)
         for el in elements:
             item = self._normalize_overpass_element(el)
             if not item or item["id"] in seen_ids:
                 continue
-            seen_ids.add(item["id"])
             p_lat = item["location"]["latitude"]
             p_lon = item["location"]["longitude"]
             best_idx = min(
-                range(len(sampled)),
-                key=lambda i: haversine_km(p_lat, p_lon, sampled[i][0], sampled[i][1]),
+                range(len(dense_points)),
+                key=lambda i: haversine_km(p_lat, p_lon, dense_points[i][0], dense_points[i][1]),
             )
+            min_dist = haversine_km(
+                p_lat, p_lon, dense_points[best_idx][0], dense_points[best_idx][1]
+            )
+            if len(dense_points) > 3 and min_dist > max_dist_km:
+                continue
+            seen_ids.add(item["id"])
             normalized_with_order.append((best_idx, item))
 
         normalized_with_order.sort(key=lambda pair: pair[0])
